@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Hidden Treasure — License Admin</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+:root{--panel:#1b1724;--edge:#3a3150;--gold:#ffcf4a;--text:#efe9f7;--muted:#a99fbb}
+*{box-sizing:border-box}body{margin:0;background:#0d0b12;color:var(--text);font:16px/1.45 Nunito,system-ui,sans-serif}
+.wrap{max-width:980px;margin:0 auto;padding:18px}
+h1{color:var(--gold);font-size:22px;margin:0 0 4px}h2{color:var(--gold);font-size:18px;margin:0 0 10px}
+.card{background:var(--panel);border:2px solid var(--edge);border-radius:14px;padding:16px;margin:14px 0}
+.btn{border-radius:10px;padding:9px 14px;font:inherit;font-weight:900;cursor:pointer;border:2px solid #5b4b80;background:#2a2140;color:var(--text)}
+.btn.gold{background:linear-gradient(#ffd965,#e9ad2c);color:#231a00;border-color:#b98418}.btn.sm{padding:5px 9px;font-size:13px}
+input,select{font:inherit;border-radius:8px;border:1px solid var(--edge);background:#120f19;color:var(--text);padding:8px 10px}
+.grid{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:end}.grid label{font-size:13px;font-weight:800;display:block;margin-bottom:3px}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:8px 6px;border-bottom:1px solid var(--edge);text-align:left;vertical-align:middle}th{color:var(--muted);font-size:13px}
+code{font-size:15px;font-weight:900;color:#ffe9a8;letter-spacing:1px}.off{opacity:.5}.mini{color:var(--muted);font-size:13px}
+.msg{font-weight:800;min-height:22px;margin-top:8px}.ok{color:#5be37d}.err{color:#ff8a8a}
+.bar{height:8px;background:#120f19;border-radius:5px;overflow:hidden;margin-top:8px}.bar>i{display:block;height:100%;width:0;background:#e9ad2c}
+@media(max-width:700px){.grid{grid-template-columns:1fr 1fr}.hidewide{display:none}}
+[hidden]{display:none!important}
+</style>
+</head>
+<body><div class="wrap">
+<h1>💎 Hidden Treasure — License Admin</h1>
+<div class="mini" id="who">Not signed in.</div>
+<div class="card" id="signin"><p>Sign in with Mr. Walker's Google account to manage school codes and upload the game.</p><button class="btn gold" id="bIn">Sign in with Google</button><div class="msg" id="inMsg"></div></div>
+
+<div id="app" hidden>
+ <div class="card">
+  <h2>➕ New school code</h2>
+  <div class="grid">
+   <div><label for="nSchool">School / teacher name</label><input id="nSchool" maxlength="80" placeholder="Sallisaw Middle School" style="width:100%"></div>
+   <div><label for="nPlan">Plan</label><select id="nPlan" style="width:100%"><option value="school">School License</option><option value="online">Online Plan</option><option value="classroom">Classroom Edition</option><option value="free">Free</option></select></div>
+   <div><label for="nUntil">Ends</label><select id="nUntil" style="width:100%"><option value="1">1 year</option><option value="0.25">3 months</option><option value="0.0833">30-day trial</option><option value="never">Never</option></select></div>
+   <div><button class="btn gold" id="bNew">Create code</button></div>
+  </div>
+  <div class="msg" id="newMsg"></div>
+ </div>
+
+ <div class="card">
+  <h2>🏫 School codes</h2>
+  <p class="mini">Devices = how many student devices or teachers have entered that code. Turn a code off to stop it right away (devices lose access the next time they open the game online).</p>
+  <div style="overflow-x:auto"><table><thead><tr><th>School</th><th>Code</th><th>Plan</th><th>Ends</th><th>Devices</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="6" class="mini">Loading…</td></tr></tbody></table></div>
+ </div>
+
+ <div class="card">
+  <h2>🎮 Upload the full game</h2>
+  <p class="mini">Choose the game's .html file. Players get the new version the next time they open the game online.</p>
+  <div id="gameInfo" class="mini">Checking current version…</div>
+  <button class="btn gold" id="gImport" style="margin-top:10px">⬇️ Copy the game from the current website</button>
+  <div class="mini" style="margin:8px 0 2px">or choose a file:</div>
+  <input type="file" id="gFile" accept=".html,text/html">
+  <div class="bar"><i id="gBar"></i></div>
+  <div class="msg" id="gMsg"></div>
+ </div>
+</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+const CFG={apiKey:"AIzaSyD2Ag_w5_lK64m9uQ3tDHX48s1SqQ5caFk",authDomain:"mr-walkers-hidden-treasure.firebaseapp.com",projectId:"mr-walkers-hidden-treasure",storageBucket:"mr-walkers-hidden-treasure.firebasestorage.app",messagingSenderId:"476984520949",appId:"1:476984520949:web:d67014256b2fe3a5ee55bc"};
+const ADMIN='gwalker@mcps.k12.ok.us';
+firebase.initializeApp(CFG);const auth=firebase.auth(),fs=firebase.firestore(),TS=firebase.firestore.Timestamp;
+const $=id=>document.getElementById(id),esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const say=(id,t,c)=>{$(id).textContent=t;$(id).className='msg '+(c||'');};
+const NEVER=new Date('2100-01-01T00:00:00Z');
+const PLAN={school:'School License',online:'Online Plan',classroom:'Classroom Edition',free:'Free'};
+function newCode(school){const A='ABCDEFGHJKMNPQRSTUVWXYZ23456789',r=n=>Array.from(crypto.getRandomValues(new Uint32Array(n)),v=>A[v%A.length]).join('');
+ const pre=(String(school).toUpperCase().replace(/[^A-Z]/g,'')+'XXXX').slice(0,4);return pre+'-'+r(4)+'-'+r(4);}
+const fmt=ts=>{const d=ts&&ts.toDate?ts.toDate():null;if(!d)return'—';return d.getUTCFullYear()>=2099?'Never':d.toLocaleDateString();};
+
+auth.onAuthStateChanged(u=>{
+ const ok=u&&!u.isAnonymous&&u.email&&u.email.toLowerCase()===ADMIN;
+ $('who').textContent=u&&!u.isAnonymous?('Signed in as '+u.email+(ok?'':' — not the admin account')):'Not signed in.';
+ $('signin').hidden=!!ok;$('app').hidden=!ok;if(ok){loadRows();loadGame();}
+});
+$('bIn').onclick=async()=>{const p=new firebase.auth.GoogleAuthProvider();try{await auth.signInWithPopup(p);}catch(e){try{await auth.signInWithRedirect(p);}catch(x){say('inMsg','Sign-in did not finish: '+(x.code||x.message),'err');}}};
+
+async function loadRows(){
+ const [L,A]=await Promise.all([fs.collection('licenses').get(),fs.collection('access').get()]);
+ const n={};A.docs.forEach(d=>{const c=d.data().code;n[c]=(n[c]||0)+1;});
+ const list=L.docs.map(d=>Object.assign({id:d.id},d.data())).sort((a,b)=>String(a.school).localeCompare(String(b.school)));
+ $('rows').innerHTML=list.map(x=>`<tr class="${x.active?'':'off'}"><td>${esc(x.school)}</td><td><code>${esc(x.id)}</code> <button class="btn sm" data-copy="${esc(x.id)}">Copy</button></td><td>${esc(PLAN[x.plan]||x.plan||'')}</td><td>${fmt(x.until)}</td><td>${n[x.id]||0}</td>
+  <td style="white-space:nowrap"><button class="btn sm" data-ext="${esc(x.id)}">+1 year</button> <button class="btn sm" data-tog="${esc(x.id)}">${x.active?'Turn off':'Turn on'}</button></td></tr>`).join('')||'<tr><td colspan="6" class="mini">No codes yet.</td></tr>';
+ document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=async()=>{try{await navigator.clipboard.writeText(b.dataset.copy);b.textContent='Copied!';}catch(e){b.textContent=b.dataset.copy;}});
+ document.querySelectorAll('[data-tog]').forEach(b=>b.onclick=async()=>{const r=fs.doc('licenses/'+b.dataset.tog),s=await r.get();await r.update({active:!s.data().active});loadRows();});
+ document.querySelectorAll('[data-ext]').forEach(b=>b.onclick=async()=>{const r=fs.doc('licenses/'+b.dataset.ext),s=await r.get(),cur=s.data().until.toDate(),base=cur>new Date()?cur:new Date();if(base.getUTCFullYear()>=2099)return;const d=new Date(base);d.setFullYear(d.getFullYear()+1);await r.update({until:TS.fromDate(d)});loadRows();});
+}
+$('bNew').onclick=async()=>{
+ const school=$('nSchool').value.trim().slice(0,80);if(!school){say('newMsg','Type the school or teacher name first.','err');return;}
+ const v=$('nUntil').value;let until;if(v==='never')until=NEVER;else{until=new Date();until.setTime(until.getTime()+parseFloat(v)*365.25*864e5);}
+ const code=newCode(school);
+ try{await fs.doc('licenses/'+code).set({school,plan:$('nPlan').value,active:true,until:TS.fromDate(until),created:firebase.firestore.FieldValue.serverTimestamp()});
+  say('newMsg','✔ Code for '+school+': '+code,'ok');$('nSchool').value='';loadRows();}
+ catch(e){say('newMsg','Could not create the code: '+(e.code||e.message),'err');}
+};
+async function loadGame(){try{const m=await fs.doc('gamefiles/meta').get();$('gameInfo').textContent=m.exists?('Current version: '+m.data().ver+' · '+Math.round(m.data().len/1024)+' KB in '+m.data().n+' parts'):'No game uploaded yet.';}catch(e){$('gameInfo').textContent='Could not read the game version: '+(e.code||e.message);}}
+async function uploadGame(html,name){
+ if(html.length<100000||!/<html/i.test(html)){say('gMsg','That does not look like the game file.','err');return;}
+ const SIZE=300000,n=Math.ceil(html.length/SIZE),ver=new Date().toISOString().slice(0,16).replace('T',' ')+' · '+(name||'game.html');
+ try{for(let i=0;i<n;i++){$('gBar').style.width=Math.round(i/n*100)+'%';await fs.doc('gamefiles/p'+i).set({d:html.slice(i*SIZE,(i+1)*SIZE)});}
+  await fs.doc('gamefiles/meta').set({ver,n,len:html.length,t:firebase.firestore.FieldValue.serverTimestamp()});
+  $('gBar').style.width='100%';say('gMsg','✔ Uploaded. Players get it next time they open the game.','ok');loadGame();}
+ catch(e){say('gMsg','Upload failed: '+(e.code||e.message),'err');}
+}
+window.uploadGame=uploadGame;
+$('gImport').onclick=async()=>{say('gMsg','Copying the game from the current website…');try{const r=await fetch('https://raw.githubusercontent.com/gwalker84/hidden-treasure/main/index.html?x='+Date.now(),{cache:'no-store'});if(!r.ok)throw new Error(r.status);uploadGame(await r.text(),'index.html from GitHub');}catch(e){say('gMsg','Could not copy it from the website. Choose the game file instead.','err');}};
+$('gFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;say('gMsg','Uploading '+f.name+'…');uploadGame(await f.text(),f.name);};
+</script>
+</body></html>

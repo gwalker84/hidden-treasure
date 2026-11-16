@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mr. Walker's Hidden Treasure</title>
+<link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><meta name="theme-color" content="#1d1830">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0d0b12;--panel:#1b1724;--edge:#3a3150;--gold:#ffcf4a;--text:#efe9f7;--muted:#a99fbb}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:radial-gradient(ellipse at top,#1d1630,#0d0b12 60%) fixed;color:var(--text);font-family:Nunito,system-ui,sans-serif;font-size:16px}
+.px{font-family:'Press Start 2P',monospace}
+.box{max-width:460px;margin:8vh auto 30px;padding:0 16px;text-align:center}
+.card{background:var(--panel);border:2px solid var(--edge);border-radius:16px;padding:22px;margin-top:22px;text-align:left}
+h1{color:var(--gold);font-size:clamp(16px,5vw,24px);line-height:1.5;margin:0;text-shadow:0 3px 0 #4a2d00}
+.kick{font-size:10px;color:var(--muted);margin-bottom:14px}
+label{display:block;font-weight:900;margin-bottom:6px}
+input{width:100%;font:inherit;font-size:22px;letter-spacing:2px;text-transform:uppercase;border-radius:10px;border:2px solid var(--edge);background:#120f19;color:var(--text);padding:12px;text-align:center}
+.btn{display:block;width:100%;margin-top:12px;border-radius:12px;padding:14px;font:inherit;font-weight:900;font-size:17px;cursor:pointer;border:2px solid #b98418;background:linear-gradient(#ffd965,#e9ad2c);color:#231a00;box-shadow:0 4px 0 #8a6210}
+.btn:disabled{opacity:.5;cursor:wait}
+.btn.ghost{background:#2a2140;color:var(--text);border-color:#5b4b80;box-shadow:none;font-size:15px;padding:10px}
+.msg{min-height:24px;margin-top:10px;font-weight:800}.err{color:#ff8a8a}.ok{color:#5be37d}
+.mini{color:var(--muted);font-size:14px;line-height:1.45}
+.bar{height:10px;background:#120f19;border:1px solid var(--edge);border-radius:6px;overflow:hidden;margin-top:14px}.bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#e9ad2c,#ffd965);transition:width .2s}
+a{color:#7cc4ff}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="box">
+ <div class="kick px">⚔️ A Science &amp; History Dungeon Quest ⚔️</div>
+ <h1 class="px">Mr. Walker's<br>Hidden Treasure</h1>
+
+ <div class="card" id="loading">
+  <div id="loadText" style="font-weight:900">Checking your access…</div>
+  <div class="bar"><i id="barFill"></i></div>
+ </div>
+
+ <div class="card" id="gate" hidden>
+  <label for="code">Enter your school code</label>
+  <input id="code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="40" placeholder="ABCD-1234-WXYZ">
+  <button class="btn" id="go">▶ Start Playing</button>
+  <div class="msg" id="msg" role="status"></div>
+  <p class="mini">Your teacher has the code. You only need to type it once on each device.</p>
+  <p class="mini">Not a student here yet? <a href="https://gwalker84.github.io/hidden-treasure-demo/">Play the free demo</a> or see plans for your school.</p>
+  <button class="btn ghost" id="teach">🍎 Mr. Walker / admin sign-in</button>
+ </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+// ===================== HIDDEN TREASURE SIGN-IN GATE =====================
+// The full game is NOT in this file. It is stored in Firestore (gamefiles/*) and only downloads
+// for devices that entered an active school code (access/{uid}) or for the admin teacher.
+const CFG={apiKey:"AIzaSyD2Ag_w5_lK64m9uQ3tDHX48s1SqQ5caFk",authDomain:"mr-walkers-hidden-treasure.firebaseapp.com",projectId:"mr-walkers-hidden-treasure",storageBucket:"mr-walkers-hidden-treasure.firebasestorage.app",messagingSenderId:"476984520949",appId:"1:476984520949:web:d67014256b2fe3a5ee55bc"};
+const $=id=>document.getElementById(id);
+const show=w=>{$('loading').hidden=w!=='loading';$('gate').hidden=w!=='gate';};
+const say=(t,c)=>{$('msg').textContent=t;$('msg').className='msg '+(c||'');};
+const prog=(t,p)=>{show('loading');$('loadText').textContent=t;if(p!=null)$('barFill').style.width=Math.round(p*100)+'%';};
+const cleanCode=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,40);
+
+// ---- tiny IndexedDB cache so the game also opens offline ----
+const IDB={db:null,open(){return this.db||(this.db=new Promise((res,rej)=>{const r=indexedDB.open('htq-gate',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);}));},
+ async get(k){try{const d=await this.open();return await new Promise(res=>{const q=d.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>res(undefined);});}catch(e){return undefined;}},
+ async set(k,v){try{const d=await this.open();await new Promise(res=>{const t=d.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=res;t.onerror=res;});}catch(e){}},
+ async del(k){try{const d=await this.open();await new Promise(res=>{const t=d.transaction('kv','readwrite');t.objectStore('kv').delete(k);t.oncomplete=res;t.onerror=res;});}catch(e){}}};
+
+firebase.initializeApp(CFG);
+const auth=firebase.auth(),fs=firebase.firestore();
+const userReady=new Promise(res=>{let done=false;auth.onAuthStateChanged(u=>{if(u){if(!done){done=true;res(u);}}else auth.signInAnonymously().catch(()=>{if(!done){done=true;res(null);}});});});
+const isAdmin=u=>!!(u&&!u.isAnonymous&&u.email&&u.email.toLowerCase()==='gwalker@mcps.k12.ok.us');
+
+async function launch(html){
+ prog('Opening the game…',1);
+ try{await firebase.app().delete();}catch(e){}
+ try{delete window.firebase;}catch(e){window.firebase=undefined;}
+ document.open();document.write(html);document.close();
+}
+
+async function downloadGame(){
+ prog('Checking for updates…',.05);
+ const meta=await fs.doc('gamefiles/meta').get();
+ if(!meta.exists)throw new Error('nogame');
+ const m=meta.data(),cached=await IDB.get('game');
+ if(cached&&cached.ver===m.ver)return cached.html;
+ const parts=[];
+ for(let i=0;i<m.n;i++){prog(cached?'Downloading the newest version…':'Downloading the game…',.1+.85*(i/m.n));const s=await fs.doc('gamefiles/p'+i).get();if(!s.exists)throw new Error('missing part');parts.push(s.data().d);}
+ const html=parts.join('');
+ if(m.len&&html.length!==m.len)throw new Error('bad size');
+ await IDB.set('game',{ver:m.ver,html});
+ return html;
+}
+
+async function checkAccess(u){
+ if(isAdmin(u))return{ok:true,until:null};
+ const a=await fs.doc('access/'+u.uid).get();
+ if(!a.exists)return{ok:false};
+ const d=a.data();
+ const lic=await fs.doc('licenses/'+d.code).get();
+ const L=lic.exists?lic.data():null;
+ const until=L&&L.until&&L.until.toMillis?L.until.toMillis():0;
+ if(!L||L.active!==true||until<Date.now())return{ok:false,expired:true,school:L&&L.school};
+ return{ok:true,until,school:L.school};
+}
+
+async function boot(){
+ show('loading');
+ const cachedAcc=await IDB.get('access');
+ let u=null;
+ try{u=await Promise.race([userReady,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),12000))]);}catch(e){}
+ if(!u||!navigator.onLine){
+  // offline: use the saved copy while the school's license is still active
+  const g=await IDB.get('game');
+  if(g&&cachedAcc&&(cachedAcc.until===null||cachedAcc.until>Date.now()))return launch(g.html);
+  show('gate');say(u?'':'You are offline. Connect to the internet the first time you play.','err');return;
+ }
+ let acc;
+ try{acc=await checkAccess(u);}catch(e){acc=cachedAcc&&cachedAcc.until>Date.now()?{ok:true,until:cachedAcc.until,offline:true}:{ok:false};}
+ if(!acc.ok){
+  await IDB.del('access');
+  show('gate');
+  if(acc.expired)say((acc.school?acc.school+"'s":'This')+' license has ended. Ask your teacher for a new code.','err');
+  return;
+ }
+ await IDB.set('access',{until:acc.until});
+ try{const html=await downloadGame();launch(html);}
+ catch(e){const g=await IDB.get('game');if(g)return launch(g.html);show('gate');say(e.message==='nogame'?'The game has not been uploaded yet. Please tell Mr. Walker.':'Could not download the game. Check your internet and try again.','err');}
+}
+
+async function redeem(){
+ const code=cleanCode($('code').value);$('code').value=code;
+ if(code.length<6){say('Please type the whole school code.','err');return;}
+ $('go').disabled=true;say('Checking code…');
+ try{
+  const u=await userReady;if(!u)throw new Error('signin');
+  const lic=await fs.doc('licenses/'+code).get();
+  const L=lic.exists?lic.data():null;
+  if(!L||L.active!==true||!(L.until&&L.until.toMillis()>Date.now())){say(L?'That code has ended. Ask your teacher for a new one.':'That code was not found. Check the spelling with your teacher.','err');$('go').disabled=false;return;}
+  await fs.doc('access/'+u.uid).set({code,until:L.until,school:String(L.school||'').slice(0,80),t:firebase.firestore.FieldValue.serverTimestamp()});
+  say('✔ Welcome, '+(L.school||'adventurer')+'!','ok');
+  setTimeout(boot,400);
+ }catch(e){say(e.message==='signin'?'Could not connect. Check your internet and try again.':'That code did not work. Check it with your teacher.','err');$('go').disabled=false;}
+}
+
+$('go').onclick=redeem;
+$('code').addEventListener('keydown',e=>{if(e.key==='Enter')redeem();});
+$('teach').onclick=async()=>{
+ const p=new firebase.auth.GoogleAuthProvider();
+ try{await auth.signInWithPopup(p);}catch(e){try{await auth.signInWithRedirect(p);return;}catch(x){say('Sign-in did not finish.','err');return;}}
+ if(!isAdmin(auth.currentUser)){say('This sign-in is only for Mr. Walker. Students: type your school code above.','err');return;}
+ boot();
+};
+try{if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});}catch(e){}
+boot();
+})();
+</script>
+</body>
+</html>
