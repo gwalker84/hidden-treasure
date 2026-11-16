@@ -27,7 +27,7 @@ code{font-size:15px;font-weight:900;color:#ffe9a8;letter-spacing:1px}.off{opacit
 <body><div class="wrap">
 <h1>💎 Hidden Treasure — License Admin</h1>
 <div class="mini" id="who">Not signed in.</div>
-<div class="card" id="signin"><p>Sign in with Mr. Walker's Google account to manage school codes and upload the game.</p><button class="btn gold" id="bIn">Sign in with Google</button><div class="msg" id="inMsg"></div></div>
+<div class="card" id="signin"><p>Sign in with the Hidden Treasure admin Google account (schoolhiddentreasuregame@gmail.com) to manage school codes and upload the game.</p><button class="btn gold" id="bIn">Sign in with Google</button><div class="msg" id="inMsg"></div></div>
 
 <div id="app" hidden>
  <div class="card">
@@ -51,9 +51,7 @@ code{font-size:15px;font-weight:900;color:#ffe9a8;letter-spacing:1px}.off{opacit
   <h2>🎮 Upload the full game</h2>
   <p class="mini">Choose the game's .html file. Players get the new version the next time they open the game online.</p>
   <div id="gameInfo" class="mini">Checking current version…</div>
-  <button class="btn gold" id="gImport" style="margin-top:10px">⬇️ Copy the game from the current website</button>
-  <div class="mini" style="margin:8px 0 2px">or choose a file:</div>
-  <input type="file" id="gFile" accept=".html,text/html">
+  <input type="file" id="gFile" accept=".html,text/html" style="margin-top:10px">
   <div class="bar"><i id="gBar"></i></div>
   <div class="msg" id="gMsg"></div>
  </div>
@@ -65,7 +63,7 @@ code{font-size:15px;font-weight:900;color:#ffe9a8;letter-spacing:1px}.off{opacit
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 const CFG={apiKey:"AIzaSyD2Ag_w5_lK64m9uQ3tDHX48s1SqQ5caFk",authDomain:"mr-walkers-hidden-treasure.firebaseapp.com",projectId:"mr-walkers-hidden-treasure",storageBucket:"mr-walkers-hidden-treasure.firebasestorage.app",messagingSenderId:"476984520949",appId:"1:476984520949:web:d67014256b2fe3a5ee55bc"};
-const ADMIN='gwalker@mcps.k12.ok.us';
+const ADMINS=['schoolhiddentreasuregame@gmail.com','gwalker@mcps.k12.ok.us'];
 firebase.initializeApp(CFG);const auth=firebase.auth(),fs=firebase.firestore(),TS=firebase.firestore.Timestamp;
 const $=id=>document.getElementById(id),esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const say=(id,t,c)=>{$(id).textContent=t;$(id).className='msg '+(c||'');};
@@ -76,7 +74,7 @@ function newCode(school){const A='ABCDEFGHJKMNPQRSTUVWXYZ23456789',r=n=>Array.fr
 const fmt=ts=>{const d=ts&&ts.toDate?ts.toDate():null;if(!d)return'—';return d.getUTCFullYear()>=2099?'Never':d.toLocaleDateString();};
 
 auth.onAuthStateChanged(u=>{
- const ok=u&&!u.isAnonymous&&u.email&&u.email.toLowerCase()===ADMIN;
+ const ok=u&&!u.isAnonymous&&u.email&&ADMINS.includes(u.email.toLowerCase());
  $('who').textContent=u&&!u.isAnonymous?('Signed in as '+u.email+(ok?'':' — not the admin account')):'Not signed in.';
  $('signin').hidden=!!ok;$('app').hidden=!ok;if(ok){loadRows();loadGame();}
 });
@@ -110,7 +108,6 @@ async function uploadGame(html,name){
  catch(e){say('gMsg','Upload failed: '+(e.code||e.message),'err');}
 }
 window.uploadGame=uploadGame;
-$('gImport').onclick=async()=>{say('gMsg','Copying the game from the current website…');try{const r=await fetch('https://raw.githubusercontent.com/gwalker84/hidden-treasure/main/index.html?x='+Date.now(),{cache:'no-store'});if(!r.ok)throw new Error(r.status);uploadGame(await r.text(),'index.html from GitHub');}catch(e){say('gMsg','Could not copy it from the website. Choose the game file instead.','err');}};
 $('gFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;say('gMsg','Uploading '+f.name+'…');uploadGame(await f.text(),f.name);};
 </script>
 </body></html>

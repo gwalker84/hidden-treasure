@@ -45,7 +45,8 @@ a{color:#7cc4ff}
   <div class="msg" id="msg" role="status"></div>
   <p class="mini">Your teacher has the code. You only need to type it once on each device.</p>
   <p class="mini">Not a student here yet? <a href="https://gwalker84.github.io/hidden-treasure-demo/">Play the free demo</a> or see plans for your school.</p>
-  <button class="btn ghost" id="teach">🍎 Mr. Walker / admin sign-in</button>
+  <button class="btn ghost" id="teach">🍎 Teacher sign-in (Google)</button>
+  <p class="mini" style="margin-top:8px">Teachers: sign in with your school Google account, then enter your school code once. Questions? <a href="mailto:schoolhiddentreasuregame@gmail.com">schoolhiddentreasuregame@gmail.com</a></p>
  </div>
 </div>
 
@@ -73,7 +74,12 @@ const IDB={db:null,open(){return this.db||(this.db=new Promise((res,rej)=>{const
 firebase.initializeApp(CFG);
 const auth=firebase.auth(),fs=firebase.firestore();
 const userReady=new Promise(res=>{let done=false;auth.onAuthStateChanged(u=>{if(u){if(!done){done=true;res(u);}}else auth.signInAnonymously().catch(()=>{if(!done){done=true;res(null);}});});});
-const isAdmin=u=>!!(u&&!u.isAnonymous&&u.email&&u.email.toLowerCase()==='gwalker@mcps.k12.ok.us');
+const ADMINS=['schoolhiddentreasuregame@gmail.com','gwalker@mcps.k12.ok.us'];
+const isAdmin=u=>!!(u&&!u.isAnonymous&&u.email&&ADMINS.includes(u.email.toLowerCase()));
+async function useCode(u,code){const lic=await fs.doc('licenses/'+code).get();const L=lic.exists?lic.data():null;
+ if(!L||L.active!==true||!(L.until&&L.until.toMillis()>Date.now()))return{ok:false,L};
+ await fs.doc('access/'+u.uid).set({code,until:L.until,school:String(L.school||'').slice(0,80),t:firebase.firestore.FieldValue.serverTimestamp()});
+ await IDB.set('code',code);return{ok:true,L};}
 
 async function launch(html){
  prog('Opening the game…',1);
@@ -121,15 +127,20 @@ async function boot(){
  }
  let acc;
  try{acc=await checkAccess(u);}catch(e){acc=cachedAcc&&cachedAcc.until>Date.now()?{ok:true,until:cachedAcc.until,offline:true}:{ok:false};}
+ if(!acc.ok&&!acc.expired&&!u.isAnonymous){
+  // a teacher just signed in on a device that already has the school code: link it to their account
+  const c=await IDB.get('code');if(c){try{const r=await useCode(u,c);if(r.ok)acc=await checkAccess(u);}catch(e){}}
+ }
  if(!acc.ok){
   await IDB.del('access');
   show('gate');
+  if(!u.isAnonymous&&!acc.expired)say('Signed in as '+(u.email||'teacher')+'. Enter your school code once to finish.','ok');
   if(acc.expired)say((acc.school?acc.school+"'s":'This')+' license has ended. Ask your teacher for a new code.','err');
   return;
  }
  await IDB.set('access',{until:acc.until});
  try{const html=await downloadGame();launch(html);}
- catch(e){const g=await IDB.get('game');if(g)return launch(g.html);show('gate');say(e.message==='nogame'?'The game has not been uploaded yet. Please tell Mr. Walker.':'Could not download the game. Check your internet and try again.','err');}
+ catch(e){const g=await IDB.get('game');if(g)return launch(g.html);show('gate');say(e.message==='nogame'?'The game has not been uploaded yet. Please email schoolhiddentreasuregame@gmail.com.':'Could not download the game. Check your internet and try again.','err');}
 }
 
 async function redeem(){
@@ -138,10 +149,8 @@ async function redeem(){
  $('go').disabled=true;say('Checking code…');
  try{
   const u=await userReady;if(!u)throw new Error('signin');
-  const lic=await fs.doc('licenses/'+code).get();
-  const L=lic.exists?lic.data():null;
-  if(!L||L.active!==true||!(L.until&&L.until.toMillis()>Date.now())){say(L?'That code has ended. Ask your teacher for a new one.':'That code was not found. Check the spelling with your teacher.','err');$('go').disabled=false;return;}
-  await fs.doc('access/'+u.uid).set({code,until:L.until,school:String(L.school||'').slice(0,80),t:firebase.firestore.FieldValue.serverTimestamp()});
+  const r=await useCode(u,code),L=r.L;
+  if(!r.ok){say(L?'That code has ended. Ask your teacher for a new one.':'That code was not found. Check the spelling with your teacher.','err');$('go').disabled=false;return;}
   say('✔ Welcome, '+(L.school||'adventurer')+'!','ok');
   setTimeout(boot,400);
  }catch(e){say(e.message==='signin'?'Could not connect. Check your internet and try again.':'That code did not work. Check it with your teacher.','err');$('go').disabled=false;}
@@ -152,7 +161,6 @@ $('code').addEventListener('keydown',e=>{if(e.key==='Enter')redeem();});
 $('teach').onclick=async()=>{
  const p=new firebase.auth.GoogleAuthProvider();
  try{await auth.signInWithPopup(p);}catch(e){try{await auth.signInWithRedirect(p);return;}catch(x){say('Sign-in did not finish.','err');return;}}
- if(!isAdmin(auth.currentUser)){say('This sign-in is only for Mr. Walker. Students: type your school code above.','err');return;}
  boot();
 };
 try{if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});}catch(e){}
