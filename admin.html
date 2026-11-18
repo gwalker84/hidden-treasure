@@ -79,7 +79,7 @@ auth.onAuthStateChanged(u=>{
  $('bOut').hidden=!(u&&!u.isAnonymous);$('signin').hidden=!!ok;$('app').hidden=!ok;if(ok){loadRows();loadGame();}
 });
 $('bOut').onclick=async()=>{try{await auth.signOut();}catch(e){}location.reload();};
-$('bIn').onclick=async()=>{const p=new firebase.auth.GoogleAuthProvider();try{await auth.signInWithPopup(p);}catch(e){try{await auth.signInWithRedirect(p);}catch(x){say('inMsg','Sign-in did not finish: '+(x.code||x.message),'err');}}};
+$('bIn').onclick=async()=>{const p=new firebase.auth.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});try{await auth.signInWithPopup(p);}catch(e){try{await auth.signInWithRedirect(p);}catch(x){say('inMsg','Sign-in did not finish: '+(x.code||x.message),'err');}}};
 
 async function loadRows(){
  const [L,A]=await Promise.all([fs.collection('licenses').get(),fs.collection('access').get()]);
