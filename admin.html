@@ -79,7 +79,10 @@ auth.onAuthStateChanged(u=>{
  $('bOut').hidden=!(u&&!u.isAnonymous);$('signin').hidden=!!ok;$('app').hidden=!ok;if(ok){loadRows();loadGame();}
 });
 $('bOut').onclick=async()=>{try{await auth.signOut();}catch(e){}location.reload();};
-$('bIn').onclick=async()=>{const p=new firebase.auth.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});try{await auth.signInWithPopup(p);}catch(e){try{await auth.signInWithRedirect(p);}catch(x){say('inMsg','Sign-in did not finish: '+(x.code||x.message),'err');}}};
+$('bIn').onclick=async()=>{const p=new firebase.auth.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});say('inMsg','A Google window is opening… pick your account there.');try{await auth.signInWithPopup(p);say('inMsg','');}catch(e){const c=e.code||'';
+ say('inMsg',c==='auth/popup-blocked'?'Chrome blocked the Google sign-in window. Click the blocked-pop-up icon at the right end of the address bar, choose "Always allow pop-ups" for this site, then click Sign in again.'
+  :c==='auth/popup-closed-by-user'||c==='auth/cancelled-popup-request'?'The Google window was closed before sign-in finished. Click Sign in with Google and pick your account.'
+  :'Sign-in did not finish ('+(c||e.message)+'). Try again, or use Chrome on a computer.','err');}};
 
 async function loadRows(){
  const [L,A]=await Promise.all([fs.collection('licenses').get(),fs.collection('access').get()]);
