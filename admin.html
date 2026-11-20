@@ -48,6 +48,13 @@ code{font-size:15px;font-weight:900;color:#ffe9a8;letter-spacing:1px}.off{opacit
  </div>
 
  <div class="card">
+  <h2>👩‍🏫 Teacher accounts</h2>
+  <p class="mini">Every teacher who signs in to the Teacher Hub (with Google or with email) is listed here. Turn an account off to stop it from loading classes and reports right away. Turn it back on any time.</p>
+  <div style="overflow-x:auto"><table><thead><tr><th>Teacher</th><th>Sign-in</th><th>School</th><th class="hidewide">First seen</th><th>Last seen</th><th></th></tr></thead><tbody id="trows"><tr><td colspan="6" class="mini">Loading…</td></tr></tbody></table></div>
+  <div class="msg" id="tMsg"></div>
+ </div>
+
+ <div class="card">
   <h2>🎮 Upload the full game</h2>
   <p class="mini">Choose the game's .html file. Players get the new version the next time they open the game online.</p>
   <div id="gameInfo" class="mini">Checking current version…</div>
@@ -76,7 +83,7 @@ const fmt=ts=>{const d=ts&&ts.toDate?ts.toDate():null;if(!d)return'—';return d
 auth.onAuthStateChanged(u=>{
  const ok=u&&!u.isAnonymous&&u.email&&ADMINS.includes(u.email.toLowerCase());
  $('who').textContent=u&&!u.isAnonymous?('Signed in as '+u.email+(ok?'':' — not the admin account')):'Not signed in.';
- $('bOut').hidden=!(u&&!u.isAnonymous);$('signin').hidden=!!ok;$('app').hidden=!ok;if(ok){loadRows();loadGame();}
+ $('bOut').hidden=!(u&&!u.isAnonymous);$('signin').hidden=!!ok;$('app').hidden=!ok;if(ok){loadRows();loadGame();loadTeachers();}
 });
 $('bOut').onclick=async()=>{try{await auth.signOut();}catch(e){}location.reload();};
 $('bIn').onclick=async()=>{const p=new firebase.auth.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});say('inMsg','A Google window is opening… pick your account there.');try{await auth.signInWithPopup(p);say('inMsg','');}catch(e){const c=e.code||'';
@@ -110,6 +117,18 @@ async function uploadGame(html,name){
   await fs.doc('gamefiles/meta').set({ver,n,len:html.length,t:firebase.firestore.FieldValue.serverTimestamp()});
   $('gBar').style.width='100%';say('gMsg','✔ Uploaded. Players get it next time they open the game.','ok');loadGame();}
  catch(e){say('gMsg','Upload failed: '+(e.code||e.message),'err');}
+}
+const dnum=s=>{const p=String(s||'').split('-').map(Number);return p.length===3?p[0]*1e4+p[1]*100+p[2]:0;};
+const dfmt=s=>{const p=String(s||'').split('-');return p.length===3?p[1]+'/'+p[2]+'/'+p[0]:'—';};
+async function loadTeachers(){
+ try{const s=await fs.collection('teachers').get();
+  const list=s.docs.map(d=>Object.assign({id:d.id},d.data())).sort((a,b)=>dnum(b.last)-dnum(a.last)||String(a.email).localeCompare(String(b.email)));
+  $('trows').innerHTML=list.map(x=>`<tr class="${x.off?'off':''}"><td><b>${esc(x.name||x.email||'')}</b>${x.name?'<div class="mini">'+esc(x.email||'')+'</div>':''}${x.off?'<div class="mini" style="color:#ff8a8a">Turned off</div>':''}</td><td>${x.prov==='email'?'📧 Email':'🔵 Google'}</td><td>${esc(x.school||'—')}</td><td class="hidewide">${dfmt(x.first)}</td><td>${dfmt(x.last)}</td>
+   <td><button class="btn sm" data-ttog="${esc(x.id)}" data-off="${x.off?1:0}">${x.off?'Turn on':'Turn off'}</button></td></tr>`).join('')||'<tr><td colspan="6" class="mini">No teachers have signed in yet.</td></tr>';
+  say('tMsg',list.length?list.length+' teacher account'+(list.length===1?'':'s')+'.':'','');
+  document.querySelectorAll('[data-ttog]').forEach(b=>b.onclick=async()=>{const off=b.dataset.off!=='1';if(off&&!confirm('Turn off this teacher account? They will not be able to load their classes or reports until you turn it back on.'))return;
+   try{await fs.doc('teachers/'+b.dataset.ttog).update({off});loadTeachers();}catch(e){say('tMsg','Could not change it: '+(e.code||e.message),'err');}});}
+ catch(e){$('trows').innerHTML='<tr><td colspan="6" class="mini">Teacher list is not available yet ('+esc(e.code||e.message)+'). Publish the updated Firestore rules first.</td></tr>';}
 }
 window.uploadGame=uploadGame;
 $('gFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;say('gMsg','Uploading '+f.name+'…');uploadGame(await f.text(),f.name);};
