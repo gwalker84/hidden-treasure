@@ -49,7 +49,7 @@ code{font-size:15px;font-weight:900;color:#ffe9a8;letter-spacing:1px}.off{opacit
 
  <div class="card">
   <h2>👩‍🏫 Teacher accounts</h2>
-  <p class="mini">Every teacher who signs in to the Teacher Hub (with Google or with email) is listed here. Turn an account off to stop it from loading classes and reports right away. Turn it back on any time.</p>
+  <p class="mini">Every teacher who signs in to the Teacher Hub (with Google or with email) is listed here. <b>Approve</b> a teacher you know so their account opens the Teacher Hub without the shared password. Turn an account off to stop it from loading classes and reports right away.</p>
   <div style="overflow-x:auto"><table><thead><tr><th>Teacher</th><th>Sign-in</th><th>School</th><th class="hidewide">First seen</th><th>Last seen</th><th></th></tr></thead><tbody id="trows"><tr><td colspan="6" class="mini">Loading…</td></tr></tbody></table></div>
   <div class="msg" id="tMsg"></div>
  </div>
@@ -123,9 +123,10 @@ const dfmt=s=>{const p=String(s||'').split('-');return p.length===3?p[1]+'/'+p[2
 async function loadTeachers(){
  try{const s=await fs.collection('teachers').get();
   const list=s.docs.map(d=>Object.assign({id:d.id},d.data())).sort((a,b)=>dnum(b.last)-dnum(a.last)||String(a.email).localeCompare(String(b.email)));
-  $('trows').innerHTML=list.map(x=>`<tr class="${x.off?'off':''}"><td><b>${esc(x.name||x.email||'')}</b>${x.name?'<div class="mini">'+esc(x.email||'')+'</div>':''}${x.off?'<div class="mini" style="color:#ff8a8a">Turned off</div>':''}</td><td>${x.prov==='email'?'📧 Email':'🔵 Google'}</td><td>${esc(x.school||'—')}</td><td class="hidewide">${dfmt(x.first)}</td><td>${dfmt(x.last)}</td>
-   <td><button class="btn sm" data-ttog="${esc(x.id)}" data-off="${x.off?1:0}">${x.off?'Turn on':'Turn off'}</button></td></tr>`).join('')||'<tr><td colspan="6" class="mini">No teachers have signed in yet.</td></tr>';
+  $('trows').innerHTML=list.map(x=>`<tr class="${x.off?'off':''}"><td><b>${esc(x.name||x.email||'')}</b>${x.name?'<div class="mini">'+esc(x.email||'')+'</div>':''}${x.off?'<div class="mini" style="color:#ff8a8a">Turned off</div>':x.ok?'<div class="mini" style="color:#5be37d">Approved</div>':'<div class="mini" style="color:#ffcf4a">Waiting for approval</div>'}</td><td>${x.prov==='email'?'📧 Email':'🔵 Google'}</td><td>${esc(x.school||'—')}</td><td class="hidewide">${dfmt(x.first)}</td><td>${dfmt(x.last)}</td>
+   <td style="white-space:nowrap"><button class="btn sm${x.ok?'':' gold'}" data-tok="${esc(x.id)}" data-ok="${x.ok?1:0}">${x.ok?'Unapprove':'Approve'}</button> <button class="btn sm" data-ttog="${esc(x.id)}" data-off="${x.off?1:0}">${x.off?'Turn on':'Turn off'}</button></td></tr>`).join('')||'<tr><td colspan="6" class="mini">No teachers have signed in yet.</td></tr>';
   say('tMsg',list.length?list.length+' teacher account'+(list.length===1?'':'s')+'.':'','');
+  document.querySelectorAll('[data-tok]').forEach(b=>b.onclick=async()=>{const ok=b.dataset.ok!=='1';try{await fs.doc('teachers/'+b.dataset.tok).update({ok});loadTeachers();}catch(e){say('tMsg','Could not change it: '+(e.code||e.message),'err');}});
   document.querySelectorAll('[data-ttog]').forEach(b=>b.onclick=async()=>{const off=b.dataset.off!=='1';if(off&&!confirm('Turn off this teacher account? They will not be able to load their classes or reports until you turn it back on.'))return;
    try{await fs.doc('teachers/'+b.dataset.ttog).update({off});loadTeachers();}catch(e){say('tMsg','Could not change it: '+(e.code||e.message),'err');}});}
  catch(e){$('trows').innerHTML='<tr><td colspan="6" class="mini">Teacher list is not available yet ('+esc(e.code||e.message)+'). Publish the updated Firestore rules first.</td></tr>';}
